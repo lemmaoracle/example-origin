@@ -155,8 +155,8 @@ describe("preset manifests", () => {
     }
   });
 
-  it("scheme manifests pass SchemaMetaSchema", () => {
-    const dir = resolve(REPO_ROOT, "presets/schemes");
+  it("schema manifests pass SchemaMetaSchema", () => {
+    const dir = resolve(REPO_ROOT, "presets/schemas");
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".json"))) {
       const json = JSON.parse(readFileSync(resolve(dir, f), "utf-8"));
       const r = SchemaMetaSchema.safeParse(json);

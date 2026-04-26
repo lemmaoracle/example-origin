@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Register circuit + scheme presets with Lemma using the real SDK.
+ * Register circuit + schema presets with Lemma using the real SDK.
  *
  *   tsx scripts/register-presets.ts             # dry-run (default, no API calls)
  *   tsx scripts/register-presets.ts --execute   # actually call the API
@@ -14,7 +14,7 @@
  *   LEMMA_API_KEY       required when --execute is passed; sent as `x-api-key`
  *
  * The script:
- *   1. Loads every JSON under presets/schemes and presets/circuits.
+ *   1. Loads every JSON under presets/schemas and presets/circuits.
  *   2. Validates each manifest with zod (CircuitMetaSchema / SchemaMetaSchema)
  *      and re-asserts it as `SchemaMeta` / `CircuitMeta` from `@lemmaoracle/spec`.
  *   3. Either prints what would be sent (dry-run) or invokes
@@ -80,12 +80,12 @@ function pretty(indent: number, value: unknown): string {
     .join("\n");
 }
 
-async function registerScheme(
+async function registerSchema(
   client: LemmaClient,
   m: Manifest<SchemaMeta>,
 ): Promise<void> {
   console.log(
-    `\n${c.cyan}[scheme]${c.reset} ${c.bold}${m.payload.id}${c.reset} ${c.dim}(${m.file})${c.reset}`,
+    `\n${c.cyan}[schema]${c.reset} ${c.bold}${m.payload.id}${c.reset} ${c.dim}(${m.file})${c.reset}`,
   );
   console.log(`  schemas.register → POST ${client.apiBase}/v1/schemas`);
   console.log("  payload:", pretty(4, m.payload));
@@ -152,8 +152,8 @@ async function main() {
 
   // zod-validate, then re-assert as the SDK's spec types so
   // schemas.register / circuits.register get exactly the shape they expect.
-  const schemeManifests = loadManifests<SchemaMeta>(
-    resolve(REPO_ROOT, "presets/schemes"),
+  const schemaManifests = loadManifests<SchemaMeta>(
+    resolve(REPO_ROOT, "presets/schemas"),
     (raw) => SchemaMetaSchema.parse(raw) as SchemaMeta,
   );
   const circuitManifests = loadManifests<CircuitMeta>(
@@ -162,15 +162,15 @@ async function main() {
   );
 
   console.log(
-    `\nfound ${schemeManifests.length} scheme preset(s), ${circuitManifests.length} circuit preset(s)`,
+    `\nfound ${schemaManifests.length} schema preset(s), ${circuitManifests.length} circuit preset(s)`,
   );
 
-  // Schemes first — every circuit references its scheme by id.
-  for (const m of schemeManifests) {
-    await registerScheme(client, m);
+  // Schemas first — every circuit references its schema by id.
+  for (const m of schemaManifests) {
+    await registerSchema(client, m);
   }
   for (const m of circuitManifests) {
-    if (!schemeManifests.some((s) => s.payload.id === m.payload.schema)) {
+    if (!schemaManifests.some((s) => s.payload.id === m.payload.schema)) {
       console.error(
         `  ${c.red}circuit ${m.payload.circuitId} references unknown schema ${m.payload.schema}${c.reset}`,
       );
@@ -180,7 +180,7 @@ async function main() {
   }
 
   console.log(
-    `\n${c.bold}done${c.reset} — ${schemeManifests.length + circuitManifests.length} preset(s) ${
+    `\n${c.bold}done${c.reset} — ${schemaManifests.length + circuitManifests.length} preset(s) ${
       EXECUTE ? "registered" : "previewed (use --execute to write)"
     }.`,
   );

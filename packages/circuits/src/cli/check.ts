@@ -31,7 +31,7 @@ function loadJson(path: string): unknown {
 
 function checkPresets() {
   const circuitsDir = resolve(REPO_ROOT, "presets/circuits");
-  const schemasDir = resolve(REPO_ROOT, "presets/schemes");
+  const schemasDir = resolve(REPO_ROOT, "presets/schemas");
   const failures: string[] = [];
 
   for (const f of readdirSync(circuitsDir).filter((n) => n.endsWith(".json"))) {
@@ -47,9 +47,9 @@ function checkPresets() {
     const path = resolve(schemasDir, f);
     const result = SchemaMetaSchema.safeParse(loadJson(path));
     if (!result.success) {
-      failures.push(`schemes/${f}: ${result.error.message}`);
+      failures.push(`schemas/${f}: ${result.error.message}`);
     } else {
-      console.log(`  ✓ presets/schemes/${f}`);
+      console.log(`  ✓ presets/schemas/${f}`);
     }
   }
   if (failures.length > 0) {

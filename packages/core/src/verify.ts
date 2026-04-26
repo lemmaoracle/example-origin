@@ -6,9 +6,11 @@
  * `verifyLstCollateral` — layer policy checks on top. They are what a bridge
  * relayer or a lending market would call *before* executing on-chain.
  *
- * The split mirrors the production Lemma split: the SDK gives you a generic
- * "is this attestation cryptographically valid?" answer; the protocol layers add
- * domain rules (chain whitelist, signer threshold, validator-set freshness …).
+ * The split mirrors the production Lemma split: the registered Groth16 circuit
+ * (verified server-side via `proofs.submit` / on-chain via the registered
+ * verifier contract) attests "the hidden witness satisfies the policy"; the
+ * protocol layers add the domain trust decisions on top (chain whitelist,
+ * signer threshold, validator-set freshness …) that don't belong in-circuit.
  */
 import { canonicalize } from "./canonical.js";
 import { commit, hmacHex, rootOfLeaves } from "./crypto.js";

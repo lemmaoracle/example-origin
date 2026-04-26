@@ -182,7 +182,7 @@ packages/
       cli/                     `circuits:inputs`, `circuits:check`
       __tests__/               vitest suite (manifest + input generation)
 presets/
-  schemes/                    SchemaMeta JSON for Lemma `schemas.register`
+  schemas/                    SchemaMeta JSON for Lemma `schemas.register`
   circuits/                   CircuitMeta JSON for Lemma `circuits.register`
 scripts/
   register-presets.ts         dry-run + execute for both API calls
@@ -280,7 +280,7 @@ Constraints:
 
 The circuits are the *minimum* needed to prove origin policy. The surrounding Lemma flow already covers the rest, so duplicating it in-circuit would only inflate the constraint count:
 
-- **Issuer BBS+ signature** over the disclosure root — checked by the SDK's `verifyAttestation`.
+- **Issuer BBS+ signature** over the disclosure root — production Lemma carries this in the `signature: IssuerSignature` field of `RegisterDocumentRequest` and verifies it server-side; this PoC keeps an in-process HMAC analogue in `packages/core/src/verify.ts::verifyAttestation`.
 - **Revocation accumulator membership** — production wires a Poseidon-Merkle non-membership proof; here the witness exposes a single `validatorSetRevoked` bit and the off-circuit verifier checks it against the revoked-roots list.
 - **On-chain anchoring** of the document hash and proof receipt — handled by the verifier contract registered via `circuits.register`.
 - **Source-chain whitelist for bridges, mint-chain whitelist for LST** — small fixed sets are cheaper as a contract-side `eq`-against-list than as a circuit.
@@ -301,7 +301,7 @@ The same Poseidon implementation lives inside the circuit (`circomlib`) and out 
 
 ## Lemma preset registration (`scripts/register-presets.ts`)
 
-The repo ships JSON manifests for both schemes and circuits under `presets/`, typed against `SchemaMeta` / `CircuitMeta` from `@lemmaoracle/spec`. A single script registers them through the real `@lemmaoracle/sdk` client:
+The repo ships JSON manifests for both schemas and circuits under `presets/`, typed against `SchemaMeta` / `CircuitMeta` from `@lemmaoracle/spec`. A single script registers them through the real `@lemmaoracle/sdk` client:
 
 ```bash
 pnpm presets:dry-run    # preview what would be sent (default — no API calls)
@@ -316,16 +316,16 @@ const client = create({
   apiBase: process.env.LEMMA_API_BASE_URL,  // SDK default: https://workers.lemma.workers.dev
   apiKey:  process.env.LEMMA_API_KEY,       // sent as `x-api-key`
 });
-await schemas.register(client, schemePayload);
+await schemas.register(client, schemaPayload);
 await circuits.register(client, circuitPayload);
 ```
 
 | SDK call | Wire effect | Payload source |
 | --- | --- | --- |
-| `schemas.register(client, payload)` | `POST {apiBase}/v1/schemas` | `presets/schemes/*.json` |
+| `schemas.register(client, payload)` | `POST {apiBase}/v1/schemas` | `presets/schemas/*.json` |
 | `circuits.register(client, payload)` | `POST {apiBase}/v1/circuits` | `presets/circuits/*.json` |
 
-Schemes are registered first because each circuit references its scheme by id (`schema: "bridge-approval-origin-v1"`).
+Schemas are registered first because each circuit references its schema by id (`schema: "bridge-approval-origin-v1"`).
 
 Required env when using `--execute`:
 
