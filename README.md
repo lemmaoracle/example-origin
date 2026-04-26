@@ -113,6 +113,8 @@ pnpm install
 pnpm demo            # both scenarios
 pnpm demo:bridge     # bridge approvals only
 pnpm demo:collateral # LST/LRT collateral only
+pnpm circuits:check  # validate circom manifests + JS-side Poseidon bindings
+pnpm presets:dry-run # preview the Lemma circuits.register / schemas.register calls
 ```
 
 Expected output (abridged):
@@ -171,9 +173,22 @@ packages/
       verify.ts         verifyAttestation + bridge/LST domain wrappers
       demo/run.ts       demo runner (loads data/ fixtures)
       __tests__/        vitest suite
+  circuits/
+    src/
+      bridge-approval-origin/  Circom source for the bridge proof
+      lst-collateral-origin/   Circom source for the LST proof
+      inputs.ts                deterministic witness/input builders
+      manifest.ts              zod schemas for preset JSON
+      cli/                     `circuits:inputs`, `circuits:check`
+      __tests__/               vitest suite (manifest + input generation)
+presets/
+  schemes/                    SchemaMeta JSON for Lemma `schemas.register`
+  circuits/                   CircuitMeta JSON for Lemma `circuits.register`
+scripts/
+  register-presets.ts         dry-run + execute for both API calls
 data/
-  bridge-approvals.json   fixtures for scenario 1
-  lst-collateral.json     fixtures for scenario 2
+  bridge-approvals.json       fixtures for scenario 1
+  lst-collateral.json         fixtures for scenario 2
 ```
 
 ---
@@ -230,12 +245,100 @@ await bridge.execute(...);
 
 ---
 
+## Circom circuits (`packages/circuits`)
+
+Two minimal Groth16 circuits demonstrate what *should* be proven in zero knowledge for each scenario. They are intentionally tiny — each has under ten constraints beyond the Poseidon commitment, so the demo compiles in seconds and the policy logic is readable in one screen.
+
+### `bridge-approval-origin`
+
+Public inputs: `originCommitment, policyDstChainId, policyMaxAmount, policyMinSigners, nowSec`.
+Private witness: `approvalIdHash, signerSetHash, dstChainId, amount, signersPresent, validUntil, salt`.
+
+Constraints (all must hold for `accepted == 1`):
+
+1. `Poseidon(approvalIdHash, signerSetHash, dstChainId, amount, signersPresent, validUntil, salt) === originCommitment` — binds the public commitment to the hidden witness.
+2. `dstChainId === policyDstChainId` — destination matches the policy target.
+3. `amount <= policyMaxAmount` — range-checked via `Num2Bits(240)` then `LessEqThan`.
+4. `signersPresent >= policyMinSigners`.
+5. `nowSec <= validUntil` — approval not expired.
+
+### `lst-collateral-origin`
+
+Public inputs: `collateralCommitment, policyAssetIdHash, policyMaxRehypoDepth, policyMaxCustodyHops, policyMinMintAge, nowSec`.
+Private witness: `lotIdHash, assetIdHash, mintChainId, custodyHops, rehypothecationDepth, validatorSetRevoked, mintedAt, salt`.
+
+Constraints:
+
+1. `Poseidon(...) === collateralCommitment` — binds the public commitment.
+2. `assetIdHash === policyAssetIdHash` — the lender's accepted asset.
+3. `validatorSetRevoked` is boolean and `=== 0` (operator/validator set not slashed).
+4. `rehypothecationDepth <= policyMaxRehypoDepth`.
+5. `custodyHops <= policyMaxCustodyHops`.
+6. `mintedAt + policyMinMintAge <= nowSec` — mint event is at least the policy's minimum age old.
+
+### What is intentionally off-circuit
+
+The circuits are the *minimum* needed to prove origin policy. The surrounding Lemma flow already covers the rest, so duplicating it in-circuit would only inflate the constraint count:
+
+- **Issuer BBS+ signature** over the disclosure root — checked by the SDK's `verifyAttestation`.
+- **Revocation accumulator membership** — production wires a Poseidon-Merkle non-membership proof; here the witness exposes a single `validatorSetRevoked` bit and the off-circuit verifier checks it against the revoked-roots list.
+- **On-chain anchoring** of the document hash and proof receipt — handled by the verifier contract registered via `circuits.register`.
+- **Source-chain whitelist for bridges, mint-chain whitelist for LST** — small fixed sets are cheaper as a contract-side `eq`-against-list than as a circuit.
+- **Custody-path identities** — only the *length* is proven. The DIDs themselves are selective-disclosure leaves bound to the signed disclosure root.
+
+### Running the circuit pipeline
+
+```bash
+pnpm circuits:inputs   # write deterministic example inputs to packages/circuits/inputs/
+pnpm circuits:check    # validate manifests, regenerate inputs, run `circom --inspect` if installed
+```
+
+`circuits:check` is the CI-friendly entry point. It works without `circom` on PATH (manifest validation + JS-side Poseidon binding still run); installing `circom` 2.x lets it additionally syntax-check both `.circom` files.
+
+The same Poseidon implementation lives inside the circuit (`circomlib`) and out here in JavaScript (`circomlibjs`), so the JS-computed `originCommitment` always matches what the witness will check — no separate hash to keep in sync.
+
+---
+
+## Lemma preset registration (`scripts/register-presets.ts`)
+
+The repo ships JSON manifests for both schemes and circuits under `presets/`, mirroring `SchemaMeta` / `CircuitMeta` from `@lemmaoracle/spec`. A single script registers them via Lemma's HTTP API:
+
+```bash
+pnpm presets:dry-run    # preview what would be POSTed (default — no API calls)
+pnpm presets:execute    # actually POST /v1/schemas and /v1/circuits
+```
+
+Endpoints (mirrors `@lemmaoracle/sdk`):
+
+| Call | Method + path | Payload |
+| --- | --- | --- |
+| `schemas.register` | `POST /v1/schemas` | `presets/schemes/*.json` |
+| `circuits.register` | `POST /v1/circuits` | `presets/circuits/*.json` |
+
+Schemes are registered first because each circuit references its scheme by id (`schema: "bridge-approval-origin-v1"`).
+
+Required env when using `--execute`:
+
+```env
+LEMMA_API_BASE_URL=https://workers.lemma.workers.dev   # default
+LEMMA_API_KEY=<your key>                               # required for --execute
+LEMMA_ORG_ID=<optional>
+LEMMA_PROJECT_ID=<optional>
+```
+
+Every payload is validated with zod (`CircuitMetaSchema` / `SchemaMetaSchema` in `packages/circuits/src/manifest.ts`) before it is printed or sent — including a sanity check that the artifact URLs use `https://` or `ipfs://`. The dry-run prints the exact JSON each call would send; nothing leaves the laptop unless `--execute` is passed.
+
+The script intentionally does not depend on `@lemmaoracle/sdk` so the demo stays installable from scratch. When the SDK is added as a dep, the two `register(...)` calls become one-line `circuits.register(client, payload)` / `schemas.register(client, payload)` calls — the payloads already match the SDK types.
+
+---
+
 ## Limitations & next steps
 
-- **No ZK proof yet.** Commitments + signatures are sufficient to demonstrate the API and the policy decisions. A production version would add a Groth16 circuit per schema (`bridge-approval-v1`, `lst-collateral-v1`) under `packages/circuit`.
+- **No proof generation pipeline.** The circom circuits compile and the inputs match the constraints, but the demo does not yet produce zkeys or witnesses. Adding a one-shot `pnpm circuits:prove` that runs `snarkjs groth16 fullprove` is the natural next step.
 - **In-memory issuer key.** Demo only — replace with a KMS-backed signer for any real deployment.
 - **Single-issuer trust model.** The verifier accepts one issuer DID; a federation registry would be needed for multi-operator settings.
 - **Revocation is a flat list.** Production should use a Merkle / sparse-merkle accumulator with on-chain anchoring.
+- **Preset artifact URIs are placeholders.** `https://example.invalid/...` keeps the manifests well-formed without pinning to a specific IPFS pin or HTTPS host. Replace before running `--execute` against a real Lemma deployment.
 
 ---
 

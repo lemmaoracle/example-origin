@@ -7,3 +7,6 @@ dist/
 package-lock.json
 .pnpm-store
 *.tgz
+# Circuit build artifacts and generated example inputs
+packages/circuits/build/
+packages/circuits/inputs/*.input.json

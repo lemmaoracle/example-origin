@@ -1,0 +1,28 @@
+{
+  "circuitId": "lst-collateral-origin-v1",
+  "schema": "lst-collateral-origin-v1",
+  "description": "Groth16 circuit binding a hidden LST/LRT collateral lot to a public Poseidon collateral commitment, with policy checks: asset whitelist, rehypothecation depth, custody hops, validator-set revocation, mint freshness.",
+  "inputs": [
+    "collateralCommitment",
+    "policyAssetIdHash",
+    "policyMaxRehypoDepth",
+    "policyMaxCustodyHops",
+    "policyMinMintAge",
+    "nowSec"
+  ],
+  "verifiers": [
+    {
+      "type": "onchain",
+      "address": "0x0000000000000000000000000000000000000000",
+      "chainId": 84532,
+      "alg": "groth16-bn254-snarkjs"
+    }
+  ],
+  "artifact": {
+    "location": {
+      "type": "https",
+      "wasm": "https://example.invalid/lst-collateral-origin-v1/circuit.wasm",
+      "zkey": "https://example.invalid/lst-collateral-origin-v1/circuit_final.zkey"
+    }
+  }
+}

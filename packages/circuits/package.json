@@ -1,0 +1,35 @@
+{
+  "name": "@example-origin/circuits",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal Circom circuits + input generators for bridge-approval-origin and lst-collateral-origin",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./inputs": {
+      "types": "./dist/inputs.d.ts",
+      "import": "./dist/inputs.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "circuits:inputs": "tsx src/cli/generate-inputs.ts",
+    "circuits:check": "tsx src/cli/check.ts"
+  },
+  "dependencies": {
+    "circomlibjs": "^0.1.7",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

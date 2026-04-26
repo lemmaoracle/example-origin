@@ -1,0 +1,34 @@
+{
+  "id": "lst-collateral-origin-v1",
+  "description": "Pre-acceptance origin attestation for LST/LRT collateral lots — asset whitelist, custody hops, rehypothecation depth, validator-set revocation, mint freshness.",
+  "normalize": {
+    "artifact": {
+      "type": "https",
+      "wasm": "https://example.invalid/lst-collateral-origin-v1/normalize.wasm",
+      "js": "https://example.invalid/lst-collateral-origin-v1/normalize.js"
+    },
+    "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "abi": {
+      "raw": {
+        "lotId": "string",
+        "asset": "string",
+        "amount": "string",
+        "mintChainId": "number",
+        "mintTxHash": "string",
+        "mintedAt": "number",
+        "custodyPath": "array",
+        "validatorSetRoot": "string",
+        "rehypothecationDepth": "number"
+      },
+      "norm": {
+        "lotIdHash": "field",
+        "assetIdHash": "field",
+        "mintChainId": "u32",
+        "custodyHops": "u16",
+        "rehypothecationDepth": "u16",
+        "validatorSetRevoked": "u1",
+        "mintedAt": "u64"
+      }
+    }
+  }
+}

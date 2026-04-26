@@ -1,0 +1,35 @@
+{
+  "id": "bridge-approval-origin-v1",
+  "description": "Pre-execution origin attestation for off-chain bridge approvals — destination chain, amount cap, signer threshold, validity window.",
+  "normalize": {
+    "artifact": {
+      "type": "https",
+      "wasm": "https://example.invalid/bridge-approval-origin-v1/normalize.wasm",
+      "js": "https://example.invalid/bridge-approval-origin-v1/normalize.js"
+    },
+    "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "abi": {
+      "raw": {
+        "approvalId": "string",
+        "signerSet": "string",
+        "signerThreshold": "number",
+        "signersPresent": "number",
+        "srcChainId": "number",
+        "dstChainId": "number",
+        "asset": "string",
+        "amount": "string",
+        "recipient": "string",
+        "approvedAt": "number",
+        "expiresAt": "number"
+      },
+      "norm": {
+        "approvalIdHash": "field",
+        "signerSetHash": "field",
+        "dstChainId": "u32",
+        "amount": "u240",
+        "signersPresent": "u16",
+        "validUntil": "u64"
+      }
+    }
+  }
+}

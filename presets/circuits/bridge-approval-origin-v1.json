@@ -1,0 +1,27 @@
+{
+  "circuitId": "bridge-approval-origin-v1",
+  "schema": "bridge-approval-origin-v1",
+  "description": "Groth16 circuit binding a hidden bridge approval to a public Poseidon origin commitment, with policy checks: dstChainId == policy, amount <= cap, signersPresent >= threshold, nowSec <= validUntil.",
+  "inputs": [
+    "originCommitment",
+    "policyDstChainId",
+    "policyMaxAmount",
+    "policyMinSigners",
+    "nowSec"
+  ],
+  "verifiers": [
+    {
+      "type": "onchain",
+      "address": "0x0000000000000000000000000000000000000000",
+      "chainId": 84532,
+      "alg": "groth16-bn254-snarkjs"
+    }
+  ],
+  "artifact": {
+    "location": {
+      "type": "https",
+      "wasm": "https://example.invalid/bridge-approval-origin-v1/circuit.wasm",
+      "zkey": "https://example.invalid/bridge-approval-origin-v1/circuit_final.zkey"
+    }
+  }
+}
