@@ -301,34 +301,44 @@ The same Poseidon implementation lives inside the circuit (`circomlib`) and out 
 
 ## Lemma preset registration (`scripts/register-presets.ts`)
 
-The repo ships JSON manifests for both schemes and circuits under `presets/`, mirroring `SchemaMeta` / `CircuitMeta` from `@lemmaoracle/spec`. A single script registers them via Lemma's HTTP API:
+The repo ships JSON manifests for both schemes and circuits under `presets/`, typed against `SchemaMeta` / `CircuitMeta` from `@lemmaoracle/spec`. A single script registers them through the real `@lemmaoracle/sdk` client:
 
 ```bash
-pnpm presets:dry-run    # preview what would be POSTed (default — no API calls)
-pnpm presets:execute    # actually POST /v1/schemas and /v1/circuits
+pnpm presets:dry-run    # preview what would be sent (default — no API calls)
+pnpm presets:execute    # actually call schemas.register / circuits.register
 ```
 
-Endpoints (mirrors `@lemmaoracle/sdk`):
+The script is wired straight into the SDK:
 
-| Call | Method + path | Payload |
+```ts
+import { create, schemas, circuits } from "@lemmaoracle/sdk";
+const client = create({
+  apiBase: process.env.LEMMA_API_BASE_URL,  // SDK default: https://workers.lemma.workers.dev
+  apiKey:  process.env.LEMMA_API_KEY,       // sent as `x-api-key`
+});
+await schemas.register(client, schemePayload);
+await circuits.register(client, circuitPayload);
+```
+
+| SDK call | Wire effect | Payload source |
 | --- | --- | --- |
-| `schemas.register` | `POST /v1/schemas` | `presets/schemes/*.json` |
-| `circuits.register` | `POST /v1/circuits` | `presets/circuits/*.json` |
+| `schemas.register(client, payload)` | `POST {apiBase}/v1/schemas` | `presets/schemes/*.json` |
+| `circuits.register(client, payload)` | `POST {apiBase}/v1/circuits` | `presets/circuits/*.json` |
 
 Schemes are registered first because each circuit references its scheme by id (`schema: "bridge-approval-origin-v1"`).
 
 Required env when using `--execute`:
 
 ```env
-LEMMA_API_BASE_URL=https://workers.lemma.workers.dev   # default
+LEMMA_API_BASE_URL=https://workers.lemma.workers.dev   # SDK default
 LEMMA_API_KEY=<your key>                               # required for --execute
-LEMMA_ORG_ID=<optional>
-LEMMA_PROJECT_ID=<optional>
+LEMMA_ORG_ID=<optional, printed only>
+LEMMA_PROJECT_ID=<optional, printed only>
 ```
 
-Every payload is validated with zod (`CircuitMetaSchema` / `SchemaMetaSchema` in `packages/circuits/src/manifest.ts`) before it is printed or sent — including a sanity check that the artifact URLs use `https://` or `ipfs://`. The dry-run prints the exact JSON each call would send; nothing leaves the laptop unless `--execute` is passed.
+Every payload is validated with zod (`CircuitMetaSchema` / `SchemaMetaSchema` in `packages/circuits/src/manifest.ts`) before it is printed or sent — including a sanity check that the artifact URLs use `https://` or `ipfs://`. The validated objects are then handed to the SDK as `SchemaMeta` / `CircuitMeta`; a static `(m: CircuitManifest) => CircuitMeta` assignment in `manifest.ts` guarantees the manifest types remain assignable to the SDK's authoritative spec — `pnpm build` fails immediately if the SDK shape ever drifts.
 
-The script intentionally does not depend on `@lemmaoracle/sdk` so the demo stays installable from scratch. When the SDK is added as a dep, the two `register(...)` calls become one-line `circuits.register(client, payload)` / `schemas.register(client, payload)` calls — the payloads already match the SDK types.
+The dry-run prints the exact JSON each call would send; nothing leaves the laptop unless `--execute` is passed.
 
 ---
 

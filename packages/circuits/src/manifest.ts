@@ -2,11 +2,16 @@
  * Manifest schemas for the two demo circuits.
  *
  * The repo ships JSON manifests under `presets/circuits/*.json` and
- * `presets/schemes/*.json` that mirror Lemma's `CircuitMeta` / `SchemaMeta`
- * shapes (see `@lemmaoracle/spec`). The registration script validates against
- * these schemas before sending anything over the wire.
+ * `presets/schemes/*.json` that are validated here, then handed verbatim to
+ * `circuits.register` / `schemas.register` from `@lemmaoracle/sdk`. The zod
+ * schemas below are intentionally *stricter* than the upstream `CircuitMeta`
+ * / `SchemaMeta` types: the SDK accepts more permissive shapes (e.g. circuits
+ * without `inputs`/`verifiers`/`artifact`), but for this PoC we want every
+ * preset to ship with all three. The static assertions at the bottom guarantee
+ * our manifests remain assignable to the SDK's spec types.
  */
 import { z } from "zod";
+import type { CircuitMeta, SchemaMeta } from "@lemmaoracle/spec";
 
 const HttpsOrIpfsUri = z
   .string()
@@ -62,3 +67,10 @@ export const SchemaMetaSchema = z.object({
   normalize: NormalizeArtifactSchema,
 });
 export type SchemeManifest = z.infer<typeof SchemaMetaSchema>;
+
+// Compile-time guarantees: anything we ship as a manifest is assignable to
+// the SDK's authoritative spec types. If the SDK shape ever drifts, tsc fails.
+const _circuitAssign: (m: CircuitManifest) => CircuitMeta = (m) => m;
+const _schemaAssign: (m: SchemeManifest) => SchemaMeta = (m) => m;
+void _circuitAssign;
+void _schemaAssign;

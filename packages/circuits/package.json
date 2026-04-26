@@ -23,6 +23,7 @@
     "circuits:check": "tsx src/cli/check.ts"
   },
   "dependencies": {
+    "@lemmaoracle/spec": "^0.0.18",
     "circomlibjs": "^0.1.7",
     "zod": "^3.23.0"
   },
