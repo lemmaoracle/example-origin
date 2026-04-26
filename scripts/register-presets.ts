@@ -12,9 +12,6 @@
  * Env:
  *   LEMMA_API_BASE_URL  default https://workers.lemma.workers.dev (SDK default)
  *   LEMMA_API_KEY       required when --execute is passed; sent as `x-api-key`
- *   LEMMA_ORG_ID        optional context label (printed only — SDK does not
- *                       send a header for it; included for forward compat)
- *   LEMMA_PROJECT_ID    same as above
  *
  * The script:
  *   1. Loads every JSON under presets/schemes and presets/circuits.
@@ -145,10 +142,6 @@ async function main() {
     `  mode:      ${EXECUTE ? c.red + "EXECUTE (will write)" : c.green + "dry-run"}${c.reset}`,
   );
   console.log(`  api key:   ${API_KEY ? "set" : c.dim + "absent" + c.reset}`);
-  if (process.env.LEMMA_ORG_ID)
-    console.log(`  org id:    ${process.env.LEMMA_ORG_ID}`);
-  if (process.env.LEMMA_PROJECT_ID)
-    console.log(`  project:   ${process.env.LEMMA_PROJECT_ID}`);
 
   if (EXECUTE && !API_KEY) {
     console.error(

@@ -332,8 +332,6 @@ Required env when using `--execute`:
 ```env
 LEMMA_API_BASE_URL=https://workers.lemma.workers.dev   # SDK default
 LEMMA_API_KEY=<your key>                               # required for --execute
-LEMMA_ORG_ID=<optional, printed only>
-LEMMA_PROJECT_ID=<optional, printed only>
 ```
 
 Every payload is validated with zod (`CircuitMetaSchema` / `SchemaMetaSchema` in `packages/circuits/src/manifest.ts`) before it is printed or sent — including a sanity check that the artifact URLs use `https://` or `ipfs://`. The validated objects are then handed to the SDK as `SchemaMeta` / `CircuitMeta`; a static `(m: CircuitManifest) => CircuitMeta` assignment in `manifest.ts` guarantees the manifest types remain assignable to the SDK's authoritative spec — `pnpm build` fails immediately if the SDK shape ever drifts.
