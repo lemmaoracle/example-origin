@@ -1,0 +1,21 @@
+{
+  "name": "example-origin",
+  "type": "module",
+  "private": true,
+  "description": "Lemma PoC: pre-execution ZK origin proofs for DeFi bridge approvals and LST/LRT collateral",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "demo:bridge": "pnpm --filter @example-origin/core demo:bridge",
+    "demo:collateral": "pnpm --filter @example-origin/core demo:collateral",
+    "demo": "pnpm --filter @example-origin/core demo",
+    "format": "prettier --write ."
+  },
+  "packageManager": "pnpm@9.0.0",
+  "devDependencies": {
+    "prettier": "^3.3.0"
+  }
+}

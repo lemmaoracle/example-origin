@@ -1,0 +1,59 @@
+[
+  {
+    "label": "well-formed approval — should execute",
+    "subjectId": "approval:0xa1b2c3-eth-arb",
+    "hide": ["recipient"],
+    "attributes": {
+      "kind": "bridge-approval-v1",
+      "approvalId": "0xa1b2c3",
+      "signerSet": "did:bridge:gov-multisig-v3",
+      "signerThreshold": 4,
+      "signersPresent": 5,
+      "srcChainId": 1,
+      "dstChainId": 42161,
+      "asset": "USDC",
+      "amount": "1000000000",
+      "recipient": "0xfeedfacefeedfacefeedfacefeedfacefeedface",
+      "approvedAt": 1714060800,
+      "expiresAt": 1714069800
+    }
+  },
+  {
+    "label": "drift-style: signer threshold not met — must reject",
+    "subjectId": "approval:0xc4d5e6-bsc-eth",
+    "hide": [],
+    "attributes": {
+      "kind": "bridge-approval-v1",
+      "approvalId": "0xc4d5e6",
+      "signerSet": "did:bridge:hot-multisig-v1",
+      "signerThreshold": 5,
+      "signersPresent": 2,
+      "srcChainId": 56,
+      "dstChainId": 1,
+      "asset": "USDC",
+      "amount": "500000000",
+      "recipient": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "approvedAt": 1714060800,
+      "expiresAt": 1714069800
+    }
+  },
+  {
+    "label": "kelp-style: dst chain not in policy — must reject",
+    "subjectId": "approval:0x999aaa-eth-unknown",
+    "hide": [],
+    "attributes": {
+      "kind": "bridge-approval-v1",
+      "approvalId": "0x999aaa",
+      "signerSet": "did:bridge:gov-multisig-v3",
+      "signerThreshold": 4,
+      "signersPresent": 4,
+      "srcChainId": 1,
+      "dstChainId": 999999,
+      "asset": "USDC",
+      "amount": "100000000",
+      "recipient": "0x1111111111111111111111111111111111111111",
+      "approvedAt": 1714060800,
+      "expiresAt": 1714069800
+    }
+  }
+]

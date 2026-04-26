@@ -1,0 +1,58 @@
+[
+  {
+    "label": "rsETH lot from trusted operator — should be accepted",
+    "subjectId": "lot:rsETH-2026-04-22-#7",
+    "hide": ["mintTxHash"],
+    "attributes": {
+      "kind": "lst-collateral-v1",
+      "lotId": "rsETH-2026-04-22-#7",
+      "asset": "rsETH",
+      "amount": "12500000000000000000",
+      "mintChainId": 1,
+      "mintTxHash": "0xab12cd34ab12cd34ab12cd34ab12cd34ab12cd34ab12cd34ab12cd34ab12cd34",
+      "mintedAt": 1713964800,
+      "custodyPath": ["did:operator:kelpdao", "did:custodian:lemma-vault-1"],
+      "validatorSetRoot": "0xfeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface",
+      "rehypothecationDepth": 0
+    }
+  },
+  {
+    "label": "kelp-style: rehypothecated collateral — must reject",
+    "subjectId": "lot:rsETH-2026-04-22-#42",
+    "hide": [],
+    "attributes": {
+      "kind": "lst-collateral-v1",
+      "lotId": "rsETH-2026-04-22-#42",
+      "asset": "rsETH",
+      "amount": "8000000000000000000",
+      "mintChainId": 1,
+      "mintTxHash": "0x1111222233334444555566667777888899990000aaaabbbbccccddddeeee",
+      "mintedAt": 1713964800,
+      "custodyPath": [
+        "did:operator:kelpdao",
+        "did:protocol:lendingX",
+        "did:protocol:looperY",
+        "did:protocol:looperZ"
+      ],
+      "validatorSetRoot": "0xfeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface",
+      "rehypothecationDepth": 3
+    }
+  },
+  {
+    "label": "slashed validator set — must reject via revocation",
+    "subjectId": "lot:rsETH-2026-04-22-#9",
+    "hide": [],
+    "attributes": {
+      "kind": "lst-collateral-v1",
+      "lotId": "rsETH-2026-04-22-#9",
+      "asset": "rsETH",
+      "amount": "1000000000000000000",
+      "mintChainId": 1,
+      "mintTxHash": "0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead",
+      "mintedAt": 1713964800,
+      "custodyPath": ["did:operator:slashed-op", "did:custodian:lemma-vault-1"],
+      "validatorSetRoot": "0xbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbad0",
+      "rehypothecationDepth": 0
+    }
+  }
+]
