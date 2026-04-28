@@ -145,6 +145,8 @@ export type BridgePolicy = {
   maxAmount: bigint;
   /** Minimum signer threshold the off-chain approval set must satisfy. */
   minSignersPresent: number;
+  /** Maximum age (seconds) of the off-chain approval relative to `nowSec`. Prevents replay of stale pre-signed authorisations. */
+  maxApprovalAgeSec: number;
 };
 
 /**
@@ -213,6 +215,29 @@ export function verifyBridgeApproval(
     return fail(
       "bridge-approval-v1",
       `signers ${a.signersPresent} below approval-set threshold ${a.signerThreshold}`,
+      notes,
+    );
+  }
+
+  // Approval age — prevents replay of stale pre-signed authorisations (Drift-style)
+  const now = opts.nowSec ?? Math.floor(Date.now() / 1000);
+  const approvalAge = now - a.approvedAt;
+  if (approvalAge > opts.policy.maxApprovalAgeSec) {
+    return fail(
+      "bridge-approval-v1",
+      `approval age ${approvalAge}s exceeds max ${opts.policy.maxApprovalAgeSec}s`,
+      notes,
+    );
+  }
+
+  // Approval expiry — the off-chain authorisation must not have expired.
+  // This is distinct from the attestation's notAfter (Lemma issuance window):
+  //   expiresAt = when the *bridge approval* itself expires
+  //   notAfter  = when the *attestation wrapping it* expires
+  if (now > a.expiresAt) {
+    return fail(
+      "bridge-approval-v1",
+      `approval expired at ${a.expiresAt}, now is ${now}`,
       notes,
     );
   }

@@ -20,15 +20,20 @@
     "build": "tsc",
     "test": "vitest run",
     "circuits:inputs": "tsx src/cli/generate-inputs.ts",
-    "circuits:check": "tsx src/cli/check.ts"
+    "circuits:check": "tsx src/cli/check.ts",
+    "circuits:prove": "tsx src/cli/prove.ts",
+    "circuits:prove:bridge": "tsx src/cli/prove.ts --circuit=bridge-approval-origin",
+    "circuits:prove:collateral": "tsx src/cli/prove.ts --circuit=lst-collateral-origin"
   },
   "dependencies": {
     "@lemmaoracle/spec": "^0.0.18",
+    "circomlib": "^2.0.5",
     "circomlibjs": "^0.1.7",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "snarkjs": "^0.7.6",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
     "vitest": "^2.1.0"

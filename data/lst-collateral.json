@@ -54,5 +54,22 @@
       "validatorSetRoot": "0xbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbad0",
       "rehypothecationDepth": 0
     }
+  },
+  {
+    "label": "kelp-style: stale mint — must reject via mint age",
+    "subjectId": "lot:rsETH-2026-01-15-#3",
+    "hide": ["mintTxHash"],
+    "attributes": {
+      "kind": "lst-collateral-v1",
+      "lotId": "rsETH-2026-01-15-#3",
+      "asset": "rsETH",
+      "amount": "5000000000000000000",
+      "mintChainId": 1,
+      "mintTxHash": "0xaaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
+      "mintedAt": 1704000000,
+      "custodyPath": ["did:operator:kelpdao", "did:custodian:lemma-vault-1"],
+      "validatorSetRoot": "0xfeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface",
+      "rehypothecationDepth": 0
+    }
   }
 ]

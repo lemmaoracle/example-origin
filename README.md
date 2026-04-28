@@ -45,7 +45,7 @@ The attestation discloses:
 | `recipient` | | ✓ (committed only — recipient may be private) |
 | `approvedAt`, `expiresAt` | ✓ | |
 
-The verifier ([`verifyBridgeApproval`](packages/core/src/verify.ts)) layers a domain policy on top: chain whitelist, amount cap, minimum signer count.
+The verifier ([`verifyBridgeApproval`](packages/core/src/verify.ts)) layers a domain policy on top: source and destination chain whitelists, amount cap, minimum signer count, and maximum approval age (prevents replay of stale pre-signed authorisations — the exact vector exploited in the Drift $285M heist).
 
 ### Scenario 2 — LST/LRT collateral provenance
 
@@ -129,7 +129,7 @@ now:    1714065000
 ═══════════════════════════════════════════════════════════════
 
 — well-formed approval — should execute —
-    disclosed 9 attr(s); hidden 1: [recipient]
+    disclosed 10 attr(s); hidden 1: [recipient]
   ✓ approved — signer set did:bridge:gov-multisig-v3: 5/4
 
 — drift-style: signer threshold not met — must reject —
@@ -137,6 +137,15 @@ now:    1714065000
 
 — kelp-style: dst chain not in policy — must reject —
   ✗ rejected — dst chain 999999 not allowed
+
+— kelp-style: src chain spoofed — must reject —
+  ✗ rejected — src chain 99999 not allowed
+
+— drift-style: expired pre-signed approval replay — must reject —
+  ✗ rejected — approval age 105000s exceeds max 86400s
+
+— drift-style: stale approval age — must reject —
+  ✗ rejected — approval age 1015000s exceeds max 86400s
 
 ═══════════════════════════════════════════════════════════════
   Scenario 2 — LST/LRT collateral provenance (pre-lending)
@@ -150,6 +159,9 @@ now:    1714065000
 
 — slashed validator set — must reject via revocation —
   ✗ rejected — validator-set root 0xbadbad… is revoked
+
+— kelp-style: stale mint — must reject via mint age —
+  ✗ rejected — mint age 10065000s exceeds max 2592000s
 ```
 
 ### Run tests
@@ -231,6 +243,7 @@ const policy: BridgePolicy = {
   allowedDstChainIds: [42161, 10],
   maxAmount: 5_000_000_000n,
   minSignersPresent: 4,
+  maxApprovalAgeSec: 24 * 60 * 60, // 24 hours
 };
 
 const result = verifyBridgeApproval(payloadFromRelayer, {
@@ -291,9 +304,28 @@ The circuits are the *minimum* needed to prove origin policy. The surrounding Le
 ```bash
 pnpm circuits:inputs   # write deterministic example inputs to packages/circuits/inputs/
 pnpm circuits:check    # validate manifests, regenerate inputs, run `circom --inspect` if installed
+pnpm circuits:prove    # full Groth16 pipeline: compile → ptau → setup → prove → verify
 ```
 
 `circuits:check` is the CI-friendly entry point. It works without `circom` on PATH (manifest validation + JS-side Poseidon binding still run); installing `circom` 2.x lets it additionally syntax-check both `.circom` files.
+
+`circuits:prove` is the full proof-generation pipeline. It requires `circom` on PATH. For each circuit it:
+
+1. Compiles the `.circom` source to R1CS + WASM via `circom`
+2. Generates (or reuses) a Powers of Tau ceremony file (2^12, sufficient for the small PoC circuits)
+3. Runs Phase 2 setup → `circuit_final.zkey`
+4. Exports the verification key
+5. Generates a Groth16 proof from the deterministic input
+6. Verifies the proof against the verification key
+
+All build artifacts land in `packages/circuits/build/<circuitId>/`. The Powers of Tau file is cached under `build/ptau/` so subsequent runs skip the one-time generation.
+
+To prove only one circuit:
+
+```bash
+pnpm --filter @example-origin/circuits circuits:prove:bridge
+pnpm --filter @example-origin/circuits circuits:prove:collateral
+```
 
 The same Poseidon implementation lives inside the circuit (`circomlib`) and out here in JavaScript (`circomlibjs`), so the JS-computed `originCommitment` always matches what the witness will check — no separate hash to keep in sync.
 
@@ -342,7 +374,6 @@ The dry-run prints the exact JSON each call would send; nothing leaves the lapto
 
 ## Limitations & next steps
 
-- **No proof generation pipeline.** The circom circuits compile and the inputs match the constraints, but the demo does not yet produce zkeys or witnesses. Adding a one-shot `pnpm circuits:prove` that runs `snarkjs groth16 fullprove` is the natural next step.
 - **In-memory issuer key.** Demo only — replace with a KMS-backed signer for any real deployment.
 - **Single-issuer trust model.** The verifier accepts one issuer DID; a federation registry would be needed for multi-operator settings.
 - **Revocation is a flat list.** Production should use a Merkle / sparse-merkle accumulator with on-chain anchoring.

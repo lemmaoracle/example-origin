@@ -34,6 +34,7 @@ const bridgePolicy: BridgePolicy = {
   allowedDstChainIds: [42161],
   maxAmount: 5_000_000_000n,
   minSignersPresent: 3,
+  maxApprovalAgeSec: 86400,
 };
 
 const lstAttrs = {
@@ -198,6 +199,30 @@ describe("verifyBridgeApproval policy", () => {
       policy: bridgePolicy,
     });
     expect(result.ok).toBe(false);
+  });
+
+  it("rejects stale approval age", () => {
+    const stale = { ...bridgeAttrs, approvedAt: NOW - bridgePolicy.maxApprovalAgeSec - 10 };
+    const att = issueAttestation(issuer, "approval:stale", stale, { nowSec: NOW });
+    const result = verifyBridgeApproval(att, {
+      issuer,
+      nowSec: NOW,
+      policy: bridgePolicy,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? "" : result.reason).toMatch(/approval age/);
+  });
+
+  it("rejects when approval has expired (expiresAt < now)", () => {
+    const expired = { ...bridgeAttrs, expiresAt: NOW - 100 };
+    const att = issueAttestation(issuer, "approval:expired", expired, { nowSec: NOW });
+    const result = verifyBridgeApproval(att, {
+      issuer,
+      nowSec: NOW,
+      policy: bridgePolicy,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? "" : result.reason).toMatch(/approval expired/);
   });
 });
 

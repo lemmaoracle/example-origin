@@ -14,12 +14,14 @@
     "demo": "pnpm --filter @example-origin/core demo",
     "circuits:inputs": "pnpm --filter @example-origin/circuits circuits:inputs",
     "circuits:check": "pnpm --filter @example-origin/circuits circuits:check",
+    "circuits:prove": "pnpm --filter @example-origin/circuits circuits:prove",
     "presets:dry-run": "tsx scripts/register-presets.ts",
     "presets:execute": "tsx scripts/register-presets.ts --execute",
     "format": "prettier --write ."
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
+    "@types/node": "^22.10.0",
     "prettier": "^3.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0"

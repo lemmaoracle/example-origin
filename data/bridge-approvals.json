@@ -55,5 +55,62 @@
       "approvedAt": 1714060800,
       "expiresAt": 1714069800
     }
+  },
+  {
+    "label": "kelp-style: src chain spoofed — must reject",
+    "subjectId": "approval:0xbbbccc-fake-eth",
+    "hide": ["recipient"],
+    "attributes": {
+      "kind": "bridge-approval-v1",
+      "approvalId": "0xbbbccc",
+      "signerSet": "did:bridge:gov-multisig-v3",
+      "signerThreshold": 4,
+      "signersPresent": 4,
+      "srcChainId": 99999,
+      "dstChainId": 42161,
+      "asset": "ETH",
+      "amount": "2000000000000000000",
+      "recipient": "0x2222222222222222222222222222222222222222",
+      "approvedAt": 1714060800,
+      "expiresAt": 1714069800
+    }
+  },
+  {
+    "label": "drift-style: stale approval age — must reject",
+    "subjectId": "approval:0xeeeeee-stale-approval",
+    "hide": ["recipient"],
+    "attributes": {
+      "kind": "bridge-approval-v1",
+      "approvalId": "0xeeeeee",
+      "signerSet": "did:bridge:gov-multisig-v3",
+      "signerThreshold": 4,
+      "signersPresent": 4,
+      "srcChainId": 1,
+      "dstChainId": 42161,
+      "asset": "USDC",
+      "amount": "500000000",
+      "recipient": "0x4444444444444444444444444444444444444444",
+      "approvedAt": 1713050000,
+      "expiresAt": 1714070000
+    }
+  },
+  {
+    "label": "drift-style: expired approval (expiresAt < now) — must reject",
+    "subjectId": "approval:0xdddfff-expired-approval",
+    "hide": ["recipient"],
+    "attributes": {
+      "kind": "bridge-approval-v1",
+      "approvalId": "0xdddfff",
+      "signerSet": "did:bridge:gov-multisig-v3",
+      "signerThreshold": 4,
+      "signersPresent": 4,
+      "srcChainId": 1,
+      "dstChainId": 42161,
+      "asset": "USDC",
+      "amount": "3000000000",
+      "recipient": "0x3333333333333333333333333333333333333333",
+      "approvedAt": 1714060800,
+      "expiresAt": 1714064000
+    }
   }
 ]

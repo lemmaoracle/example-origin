@@ -45,6 +45,7 @@ const bridgePolicy: BridgePolicy = {
   allowedDstChainIds: [1, 42161, 8453, 10],
   maxAmount: 5_000_000_000n, // 5,000 USDC (6-decimal) or equivalent
   minSignersPresent: 3,
+  maxApprovalAgeSec: 24 * 60 * 60, // 24 hours
 };
 
 const lstPolicy: LstPolicy = {
@@ -122,7 +123,7 @@ function expectMatch(label: string, gotOk: boolean) {
 async function runBridge() {
   header("Scenario 1 — Bridge approval origin (pre-execution)");
   console.log(
-    `  ${c.dim}policy: src=${bridgePolicy.allowedSrcChainIds.join(",")} dst=${bridgePolicy.allowedDstChainIds.join(",")} maxAmount=${bridgePolicy.maxAmount} minSigners=${bridgePolicy.minSignersPresent}${c.reset}`,
+    `  ${c.dim}policy: src=${bridgePolicy.allowedSrcChainIds.join(",")} dst=${bridgePolicy.allowedDstChainIds.join(",")} maxAmount=${bridgePolicy.maxAmount} minSigners=${bridgePolicy.minSignersPresent} maxApprovalAge=${bridgePolicy.maxApprovalAgeSec}s${c.reset}`,
   );
 
   const fixtures = loadFixtures<BridgeFixture>(
