@@ -54,7 +54,7 @@ const lstAttrs = {
 const lstPolicy: LstPolicy = {
   allowedMintChainIds: [1],
   maxRehypothecationDepth: 1,
-  trustedCustodians: ["did:custodian:lemma"],
+  trustedPathNodes: ["did:operator:kelp", "did:custodian:lemma"],
   maxMintAgeSec: 86400,
 };
 
@@ -146,7 +146,7 @@ describe("verifyAttestation", () => {
     const result = verifyAttestation(att, {
       issuer,
       nowSec: NOW,
-      revocations: { subjects: ["subj:6"], validatorSetRoots: [] },
+      revocations: { subjects: ["subj:6"], validatorSetRoots: [], consumedApprovalIds: [] },
     });
     expect(result.ok).toBe(false);
     expect(result.ok ? "" : result.reason).toMatch(/revoked/);
@@ -224,6 +224,25 @@ describe("verifyBridgeApproval policy", () => {
     expect(result.ok).toBe(false);
     expect(result.ok ? "" : result.reason).toMatch(/approval expired/);
   });
+
+  it("rejects replay of a consumed approvalId (Drift-style replay attack)", () => {
+    const att = issueAttestation(issuer, "approval:replay", bridgeAttrs, {
+      hide: ["recipient"],
+      nowSec: NOW,
+    });
+    const result = verifyBridgeApproval(att, {
+      issuer,
+      nowSec: NOW,
+      policy: bridgePolicy,
+      revocations: {
+        subjects: [],
+        validatorSetRoots: [],
+        consumedApprovalIds: [bridgeAttrs.approvalId],
+      },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? "" : result.reason).toMatch(/already consumed.*replay prevented/);
+  });
 });
 
 describe("verifyLstCollateral policy", () => {
@@ -246,6 +265,7 @@ describe("verifyLstCollateral policy", () => {
       revocations: {
         subjects: [],
         validatorSetRoots: [lstAttrs.validatorSetRoot],
+        consumedApprovalIds: [],
       },
     });
     expect(result.ok).toBe(false);
@@ -276,7 +296,26 @@ describe("verifyLstCollateral policy", () => {
       policy: lstPolicy,
     });
     expect(result.ok).toBe(false);
-    expect(result.ok ? "" : result.reason).toMatch(/custodian/);
+    expect(result.ok ? "" : result.reason).toMatch(/untrusted node/);
+  });
+
+  it("rejects when an intermediate node in the custody path is untrusted (Kelp-style)", () => {
+    const attacked = {
+      ...lstAttrs,
+      custodyPath: [
+        "did:operator:kelp",
+        "did:protocol:rogue-lender",
+        "did:custodian:lemma",
+      ],
+    };
+    const att = issueAttestation(issuer, "lot:attacked", attacked, { nowSec: NOW });
+    const result = verifyLstCollateral(att, {
+      issuer,
+      nowSec: NOW,
+      policy: lstPolicy,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? "" : result.reason).toMatch(/untrusted node.*rogue-lender/);
   });
 
   it("rejects stale mint events", () => {

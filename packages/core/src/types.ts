@@ -151,4 +151,10 @@ export type RevocationList = {
   subjects: string[];
   /** Revoked validator-set roots, as 0x-hex. */
   validatorSetRoots: string[];
+  /**
+   * Approval IDs that have already been consumed (executed). Prevents replay
+   * within the validity window — the exact vector exploited in the Drift $285M
+   * heist where a valid pre-signed authorisation was reused.
+   */
+  consumedApprovalIds: string[];
 };

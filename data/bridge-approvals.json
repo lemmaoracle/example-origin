@@ -112,5 +112,24 @@
       "approvedAt": 1714060800,
       "expiresAt": 1714064000
     }
+  },
+  {
+    "label": "drift-style: replay of consumed approval — must reject",
+    "subjectId": "approval:0xreplay-consumed",
+    "hide": ["recipient"],
+    "attributes": {
+      "kind": "bridge-approval-v1",
+      "approvalId": "0xreplay",
+      "signerSet": "did:bridge:gov-multisig-v3",
+      "signerThreshold": 4,
+      "signersPresent": 5,
+      "srcChainId": 1,
+      "dstChainId": 42161,
+      "asset": "USDC",
+      "amount": "2000000000",
+      "recipient": "0x5555555555555555555555555555555555555555",
+      "approvedAt": 1714060800,
+      "expiresAt": 1714069800
+    }
   }
 ]

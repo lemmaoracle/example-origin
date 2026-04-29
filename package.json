@@ -15,6 +15,7 @@
     "circuits:inputs": "pnpm --filter @example-origin/circuits circuits:inputs",
     "circuits:check": "pnpm --filter @example-origin/circuits circuits:check",
     "circuits:prove": "pnpm --filter @example-origin/circuits circuits:prove",
+    "presets:generate": "tsx scripts/generate-manifests.ts",
     "presets:dry-run": "tsx scripts/register-presets.ts",
     "presets:execute": "tsx scripts/register-presets.ts --execute",
     "format": "prettier --write ."

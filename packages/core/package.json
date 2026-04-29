@@ -20,6 +20,8 @@
     "demo:collateral": "tsx src/demo/run.ts --scenario=collateral"
   },
   "dependencies": {
+    "circomlibjs": "^0.1.7",
+    "snarkjs": "^0.7.6",
     "zod": "^3.23.0"
   },
   "devDependencies": {

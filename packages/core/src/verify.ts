@@ -33,7 +33,11 @@ export type VerifyOptions = {
   revocations?: RevocationList;
 };
 
-const ZERO_REVOCATIONS: RevocationList = { subjects: [], validatorSetRoots: [] };
+const ZERO_REVOCATIONS: RevocationList = {
+  subjects: [],
+  validatorSetRoots: [],
+  consumedApprovalIds: [],
+};
 
 function fail(
   schema: VerificationResult["schema"],
@@ -168,6 +172,7 @@ export function verifyBridgeApproval(
   // else can be hidden behind a commitment.
   const policyShape = BridgeApprovalAttributesSchema.pick({
     kind: true,
+    approvalId: true,
     signerSet: true,
     signerThreshold: true,
     signersPresent: true,
@@ -190,6 +195,18 @@ export function verifyBridgeApproval(
   }
   const a = attrs.data;
   const notes = [...base.notes];
+
+  // Replay prevention — reject if this approvalId was already consumed.
+  // This directly addresses the Drift-style attack where a valid pre-signed
+  // authorisation is replayed within the validity window.
+  const rev = opts.revocations ?? ZERO_REVOCATIONS;
+  if (rev.consumedApprovalIds.includes(a.approvalId)) {
+    return fail(
+      "bridge-approval-v1",
+      `approvalId ${a.approvalId} already consumed (replay prevented)`,
+      notes,
+    );
+  }
 
   if (!opts.policy.allowedSrcChainIds.includes(a.srcChainId)) {
     return fail("bridge-approval-v1", `src chain ${a.srcChainId} not allowed`, notes);
@@ -255,8 +272,13 @@ export type LstPolicy = {
   allowedMintChainIds: number[];
   /** Maximum allowed rehypothecation depth (0 = no rehypothecation, 1 = one re-stake hop, …). */
   maxRehypothecationDepth: number;
-  /** Custody addresses/labels the lender trusts as final-leg custodians. */
-  trustedCustodians: string[];
+  /**
+   * Entities the lender trusts at *any* position in the custody path.
+   * Every node in custodyPath must appear in this set — this prevents an
+   * untrusted intermediate actor from inserting themselves between a known
+   * operator and a trusted custodian (the Kelp DAO attack vector).
+   */
+  trustedPathNodes: string[];
   /** Maximum age (seconds) of the mint event relative to `nowSec`. */
   maxMintAgeSec: number;
 };
@@ -324,11 +346,17 @@ export function verifyLstCollateral(
     );
   }
 
-  const finalCustodian = a.custodyPath[a.custodyPath.length - 1];
-  if (!opts.policy.trustedCustodians.includes(finalCustodian!)) {
+  // Full custody-path verification: every node must be a trusted path entity.
+  // This prevents an untrusted intermediate from inserting themselves in the
+  // custody chain — the exact Kelp DAO attack vector where a malicious
+  // protocol sits between a known operator and the final custodian.
+  const untrustedNode = a.custodyPath.find(
+    (node) => !opts.policy.trustedPathNodes.includes(node),
+  );
+  if (untrustedNode) {
     return fail(
       "lst-collateral-v1",
-      `final custodian "${finalCustodian}" not in trusted set`,
+      `custody path contains untrusted node "${untrustedNode}"`,
       notes,
     );
   }

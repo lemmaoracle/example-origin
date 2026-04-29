@@ -1,14 +1,20 @@
 /**
  * Demo runner.
  *
- *   pnpm demo                  # both scenarios
+ *   pnpm demo                  # both scenarios (TS policy + ZK proof if artifacts available)
  *   pnpm demo:bridge           # bridge approvals only
  *   pnpm demo:collateral       # LST/LRT collateral only
  *
  * For each fixture: issue an attestation, run the appropriate domain verifier,
- * and print the decision. Exits non-zero only if a fixture that should pass
- * fails (or a fixture that should fail unexpectedly passes) — useful as a
- * smoke test in CI.
+ * and print the decision. When Groth16 circuit artifacts are available (from
+ * `pnpm circuits:prove`), also generates and verifies a ZK proof —
+ * demonstrating the layered architecture where:
+ *
+ *   ZK circuit  → proves commitment binding + in-circuit policy constraints
+ *   TS verifier → checks off-circuit policy (issuer sig, revocation, replay, full custody path)
+ *
+ * Exits non-zero only if a fixture that should pass fails (or a fixture that
+ * should fail unexpectedly passes) — useful as a smoke test in CI.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -21,7 +27,14 @@ import {
   type BridgePolicy,
   type LstPolicy,
   type RevocationList,
+  type BridgeApprovalAttributes,
+  type LstCollateralAttributes,
 } from "../index.js";
+import {
+  zkProveBridgeApproval,
+  zkProveLstCollateral,
+  zkArtifactsAvailable,
+} from "../zk-verify.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,6 +49,7 @@ const c = {
   green: "\x1b[32m",
   yellow: "\x1b[33m",
   red: "\x1b[31m",
+  magenta: "\x1b[35m",
 } as const;
 
 const issuer = generateIssuerKey(process.env.ISSUER_DID ?? "did:lemma:demo-issuer");
@@ -51,7 +65,10 @@ const bridgePolicy: BridgePolicy = {
 const lstPolicy: LstPolicy = {
   allowedMintChainIds: [1, 8453],
   maxRehypothecationDepth: 1,
-  trustedCustodians: ["did:custodian:lemma-vault-1"],
+  trustedPathNodes: [
+    "did:operator:kelpdao",
+    "did:custodian:lemma-vault-1",
+  ],
   maxMintAgeSec: 30 * 24 * 60 * 60,
 };
 
@@ -60,6 +77,7 @@ const revocations: RevocationList = {
   validatorSetRoots: [
     "0xbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbad0",
   ],
+  consumedApprovalIds: ["0xreplay"],
 };
 
 // All fixtures evaluated against a fixed `now` so age/expiry checks are stable.
@@ -100,6 +118,12 @@ function note(msg: string) {
   console.log(`    ${c.dim}${msg}${c.reset}`);
 }
 
+function zkTag(verified: boolean) {
+  const sym = verified ? "✓" : "✗";
+  const color = verified ? c.green : c.red;
+  return `${c.magenta}[ZK]${c.reset} ${color}${sym}${c.reset} Groth16 proof ${verified ? "verified" : "FAILED"}`;
+}
+
 let pass = 0;
 let unexpected = 0;
 
@@ -120,10 +144,54 @@ function expectMatch(label: string, gotOk: boolean) {
   );
 }
 
+async function tryZkBridge(attrs: BridgeApprovalAttributes) {
+  try {
+    const result = await zkProveBridgeApproval(attrs, {
+      policyDstChainId: bridgePolicy.allowedDstChainIds[0] ?? 42161,
+      policyMaxAmount: bridgePolicy.maxAmount.toString(),
+      policyMinSigners: bridgePolicy.minSignersPresent,
+      nowSec: NOW_SEC,
+    });
+    note(zkTag(result.proof.verified));
+    note(
+      `    commitment=${result.inputSummary.originCommitment.slice(0, 16)}…`,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    note(`${c.magenta}[ZK]${c.reset} ${c.yellow}skipped${c.reset} — ${msg}`);
+  }
+}
+
+async function tryZkLst(attrs: LstCollateralAttributes, revoked: boolean) {
+  try {
+    const result = await zkProveLstCollateral(
+      attrs,
+      {
+        policyAssetId: attrs.asset,
+        policyMaxRehypoDepth: lstPolicy.maxRehypothecationDepth,
+        policyMaxCustodyHops: attrs.custodyPath.length + 2,
+        policyMinMintAge: 0,
+        nowSec: NOW_SEC,
+      },
+      revoked ? 1 : 0,
+    );
+    note(zkTag(result.proof.verified));
+    note(
+      `    commitment=${result.inputSummary.collateralCommitment.slice(0, 16)}…`,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    note(`${c.magenta}[ZK]${c.reset} ${c.yellow}skipped${c.reset} — ${msg}`);
+  }
+}
+
 async function runBridge() {
   header("Scenario 1 — Bridge approval origin (pre-execution)");
   console.log(
     `  ${c.dim}policy: src=${bridgePolicy.allowedSrcChainIds.join(",")} dst=${bridgePolicy.allowedDstChainIds.join(",")} maxAmount=${bridgePolicy.maxAmount} minSigners=${bridgePolicy.minSignersPresent} maxApprovalAge=${bridgePolicy.maxApprovalAgeSec}s${c.reset}`,
+  );
+  console.log(
+    `  ${c.dim}replay protection: ${revocations.consumedApprovalIds.length} consumed approvalId(s)${c.reset}`,
   );
 
   const fixtures = loadFixtures<BridgeFixture>(
@@ -153,6 +221,12 @@ async function runBridge() {
       rej(`rejected — ${result.reason}`);
     }
     for (const n of result.notes) note(n);
+
+    if (result.ok) {
+      const attrs = fx.attributes as BridgeApprovalAttributes;
+      await tryZkBridge(attrs);
+    }
+
     expectMatch(fx.label, result.ok);
   }
 }
@@ -160,7 +234,7 @@ async function runBridge() {
 async function runCollateral() {
   header("Scenario 2 — LST/LRT collateral provenance (pre-lending)");
   console.log(
-    `  ${c.dim}policy: trustedCustodians=[${lstPolicy.trustedCustodians.join(",")}] maxDepth=${lstPolicy.maxRehypothecationDepth} maxAge=${lstPolicy.maxMintAgeSec}s${c.reset}`,
+    `  ${c.dim}policy: trustedPathNodes=[${lstPolicy.trustedPathNodes.join(",")}] maxDepth=${lstPolicy.maxRehypothecationDepth} maxAge=${lstPolicy.maxMintAgeSec}s${c.reset}`,
   );
   console.log(
     `  ${c.dim}revoked validator-set roots: ${revocations.validatorSetRoots.length}${c.reset}`,
@@ -193,6 +267,12 @@ async function runCollateral() {
       rej(`rejected — ${result.reason}`);
     }
     for (const n of result.notes) note(n);
+
+    if (result.ok) {
+      const attrs = fx.attributes as LstCollateralAttributes;
+      await tryZkLst(attrs, false);
+    }
+
     expectMatch(fx.label, result.ok);
   }
 }
@@ -202,11 +282,16 @@ async function main() {
   const scenario =
     args.find((a) => a.startsWith("--scenario="))?.split("=")[1] ?? "all";
 
+  const zkAvailable = zkArtifactsAvailable();
+
   console.log(
-    `\n${c.bold}example-origin${c.reset} ${c.dim}— minimal Lemma PoC${c.reset}`,
+    `\n${c.bold}example-origin${c.reset} ${c.dim}— Lemma origin proof demo${c.reset}`,
   );
   console.log(`${c.dim}issuer: ${issuer.did}${c.reset}`);
   console.log(`${c.dim}now:    ${NOW_SEC}${c.reset}`);
+  console.log(
+    `${c.dim}ZK:     ${zkAvailable ? c.green + "artifacts found — Groth16 proofs enabled" : c.yellow + "no artifacts — run `pnpm circuits:prove` to enable ZK proofs"}${c.reset}`,
+  );
 
   if (scenario === "bridge" || scenario === "all") await runBridge();
   if (scenario === "collateral" || scenario === "all") await runCollateral();

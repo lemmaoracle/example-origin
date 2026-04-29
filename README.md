@@ -6,10 +6,10 @@ A minimal, runnable PoC that responds to Kelp DAO / Drift–style incidents — 
 
 This repo demonstrates two flows that bridges and lending markets can verify **before they execute**:
 
-1. **Bridge approval origin** — prove an off-chain approval came from a real signer set, on an allowed source/destination chain, within an unexpired window.
-2. **LST/LRT collateral provenance** — prove a liquid-staking / restaking lot was minted by a known operator, custodied by a trusted vault, with bounded rehypothecation depth and a non-revoked validator set.
+1. **Bridge approval origin** — prove an off-chain approval came from a real signer set, on an allowed source/destination chain, within an unexpired window, and that it hasn't been replayed.
+2. **LST/LRT collateral provenance** — prove a liquid-staking / restaking lot was minted by a known operator, passed exclusively through trusted custody nodes, with bounded rehypothecation depth and a non-revoked validator set.
 
-Both flows ship as a single TypeScript library plus a runnable demo script. No on-chain calls are made; the verifier output is the gate that a real relayer or lending market would consult.
+Both flows ship as a TypeScript library, runnable demo script, and Groth16 ZK circuits. When circuit artifacts are available, the demo generates and verifies real zero-knowledge proofs — not just TypeScript policy checks.
 
 ---
 
@@ -33,23 +33,24 @@ Funds already gone                  Tx only executes if proof + policy pass
 
 ### Scenario 1 — Bridge approval origin
 
-A bridge or relayer receives an off-chain approval. Before initiating the lock/mint, it asks: *was this approval really endorsed by the multisig the protocol thinks it was?*
+A bridge or relayer receives an off-chain approval. Before initiating the lock/mint, it asks: *was this approval really endorsed by the multisig the protocol thinks it was, and has it already been consumed?*
 
 The attestation discloses:
 
 | Attribute | Disclosed | Hidden by default |
 | --- | --- | --- |
+| `approvalId` | ✓ | |
 | `signerSet` (DID) | ✓ | |
 | `signerThreshold` / `signersPresent` | ✓ | |
 | `srcChainId`, `dstChainId`, `asset`, `amount` | ✓ | |
 | `recipient` | | ✓ (committed only — recipient may be private) |
 | `approvedAt`, `expiresAt` | ✓ | |
 
-The verifier ([`verifyBridgeApproval`](packages/core/src/verify.ts)) layers a domain policy on top: source and destination chain whitelists, amount cap, minimum signer count, and maximum approval age (prevents replay of stale pre-signed authorisations — the exact vector exploited in the Drift $285M heist).
+The verifier ([`verifyBridgeApproval`](packages/core/src/verify.ts)) layers a domain policy on top: source and destination chain whitelists, amount cap, minimum signer count, maximum approval age, approval expiry, and **replay prevention** (consumed `approvalId` list — the exact vector exploited in the Drift $285M heist where a valid pre-signed authorisation was reused within the validity window).
 
 ### Scenario 2 — LST/LRT collateral provenance
 
-A lending market about to accept rsETH (or any LST/LRT) as collateral asks: *was this lot minted by a known operator, did it pass through trusted custody, and how many times has it been rehypothecated already?*
+A lending market about to accept rsETH (or any LST/LRT) as collateral asks: *was this lot minted by a known operator, did it pass exclusively through trusted custody, and how many times has it been rehypothecated already?*
 
 The attestation discloses:
 
@@ -62,7 +63,7 @@ The attestation discloses:
 | `validatorSetRoot` | ✓ | |
 | `rehypothecationDepth` | ✓ | |
 
-The verifier ([`verifyLstCollateral`](packages/core/src/verify.ts)) checks: mint chain whitelist, validator-set revocation list (slashed / compromised operators), maximum rehypothecation depth, trusted custodians, and freshness of the mint event.
+The verifier ([`verifyLstCollateral`](packages/core/src/verify.ts)) checks: mint chain whitelist, validator-set revocation list, maximum rehypothecation depth, **full custody-path verification** (every node must be in the trusted set — not just the final custodian), and freshness of the mint event.
 
 ---
 
@@ -81,16 +82,21 @@ issueAttestation()
         ▼
    { revealed, hidden, commitments, signature }
         │
-        ▼
-verifyBridgeApproval / verifyLstCollateral
-  ├─ shape (zod)
-  ├─ issuer, signature, validity window
-  ├─ root + per-leaf commitments
-  ├─ revocation (subject + validator set)
-  └─ domain policy (chain ids, threshold, depth, custodian, age)
-        │
-        ▼
-{ ok: true, revealed, notes } | { ok: false, reason, notes }
+        ├──────────────────────────────────────────┐
+        ▼                                          ▼
+verifyBridgeApproval / verifyLstCollateral     ZK proof (if artifacts available)
+  ├─ shape (zod)                               ├─ map attributes → circuit witness
+  ├─ issuer, signature, validity window        ├─ Poseidon commitment in witness
+  ├─ root + per-leaf commitments               ├─ Groth16 fullProve
+  ├─ revocation (subject + validator set)      └─ groth16.verify → ✓/✗
+  ├─ replay prevention (consumed approvalIds)
+  ├─ full custody-path trust check
+  └─ domain policy (chain ids, threshold, depth, age)
+        │                                          │
+        ▼                                          ▼
+{ ok, revealed, notes }                      { proof, verified, commitment }
+        │                                          │
+        └──────────── both must pass ──────────────┘
 ```
 
 ---
@@ -100,6 +106,7 @@ verifyBridgeApproval / verifyLstCollateral
 ### Prerequisites
 - Node.js 20+
 - pnpm 9+
+- **For ZK proofs**: circom 2.x on PATH
 
 ```bash
 git clone https://github.com/lemmaoracle/example-origin
@@ -110,42 +117,57 @@ pnpm install
 ### Run the demo
 
 ```bash
-pnpm demo            # both scenarios
+pnpm demo            # both scenarios (TS policy + ZK proof if artifacts available)
 pnpm demo:bridge     # bridge approvals only
 pnpm demo:collateral # LST/LRT collateral only
+```
+
+Without circuit artifacts, the demo runs the TypeScript policy verifier only. With artifacts (from `pnpm circuits:prove`), it also generates and verifies Groth16 proofs for each passing fixture.
+
+### Generate ZK proofs
+
+```bash
+pnpm circuits:prove    # full Groth16 pipeline: compile → ptau → setup → prove → verify
+pnpm demo              # now includes ZK proof output
+```
+
+### Generate preset manifests from build artifacts
+
+```bash
+pnpm presets:generate  # write manifests with real artifact hashes + URLs
+ARTIFACT_BASE_URL=https://cdn.example.com/circuits/ pnpm presets:generate
+```
+
+### Other commands
+
+```bash
 pnpm circuits:check  # validate circom manifests + JS-side Poseidon bindings
 pnpm presets:dry-run # preview the Lemma circuits.register / schemas.register calls
+pnpm test            # run all tests
 ```
 
-Expected output (abridged):
+Expected demo output (with ZK artifacts, abridged):
 
 ```
-example-origin — minimal Lemma PoC
+example-origin — Lemma origin proof demo
 issuer: did:lemma:demo-issuer
 now:    1714065000
+ZK:     artifacts found — Groth16 proofs enabled
 
 ═══════════════════════════════════════════════════════════════
   Scenario 1 — Bridge approval origin (pre-execution)
 ═══════════════════════════════════════════════════════════════
 
 — well-formed approval — should execute —
-    disclosed 10 attr(s); hidden 1: [recipient]
   ✓ approved — signer set did:bridge:gov-multisig-v3: 5/4
+  [ZK] ✓ Groth16 proof verified
+      commitment=1668698262476476…
+
+— drift-style: replay of consumed approval — must reject —
+  ✗ rejected — approvalId 0xreplay already consumed (replay prevented)
 
 — drift-style: signer threshold not met — must reject —
   ✗ rejected — only 2 signers present, need 3
-
-— kelp-style: dst chain not in policy — must reject —
-  ✗ rejected — dst chain 999999 not allowed
-
-— kelp-style: src chain spoofed — must reject —
-  ✗ rejected — src chain 99999 not allowed
-
-— drift-style: expired pre-signed approval replay — must reject —
-  ✗ rejected — approval age 105000s exceeds max 86400s
-
-— drift-style: stale approval age — must reject —
-  ✗ rejected — approval age 1015000s exceeds max 86400s
 
 ═══════════════════════════════════════════════════════════════
   Scenario 2 — LST/LRT collateral provenance (pre-lending)
@@ -153,21 +175,14 @@ now:    1714065000
 
 — rsETH lot from trusted operator — should be accepted —
   ✓ accepted — collateral: rsETH 12500000000000000000 (lot rsETH-2026-04-22-#7)
+  [ZK] ✓ Groth16 proof verified
+      commitment=1462983756102987…
 
-— kelp-style: rehypothecated collateral — must reject —
-  ✗ rejected — rehypothecation depth 3 exceeds max 1
+— kelp-style: untrusted intermediate in custody path — must reject —
+  ✗ rejected — custody path contains untrusted node "did:protocol:rogue-lender"
 
 — slashed validator set — must reject via revocation —
   ✗ rejected — validator-set root 0xbadbad… is revoked
-
-— kelp-style: stale mint — must reject via mint age —
-  ✗ rejected — mint age 10065000s exceeds max 2592000s
-```
-
-### Run tests
-
-```bash
-pnpm test
 ```
 
 ---
@@ -183,7 +198,9 @@ packages/
       crypto.ts         HMAC-SHA256 commit / root / signature helpers
       issue.ts          issueAttestation()
       verify.ts         verifyAttestation + bridge/LST domain wrappers
-      demo/run.ts       demo runner (loads data/ fixtures)
+      prover.ts         Local Groth16 proof generation + verification
+      zk-verify.ts      ZK-attestation integration (attrs → circuit → proof)
+      demo/run.ts       demo runner (TS policy + ZK proof)
       __tests__/        vitest suite
   circuits/
     src/
@@ -198,6 +215,7 @@ presets/
   circuits/                   CircuitMeta JSON for Lemma `circuits.register`
 scripts/
   register-presets.ts         dry-run + execute for both API calls
+  generate-manifests.ts       build manifests from circuit artifacts + real hashes
 data/
   bridge-approvals.json       fixtures for scenario 1
   lst-collateral.json         fixtures for scenario 2
@@ -214,12 +232,51 @@ This PoC intentionally swaps Lemma's production primitives for stdlib equivalent
 | Attribute commitment | HMAC-SHA256(key, value, randomness) | Poseidon over BN254 |
 | Issuer signature | HMAC-SHA256 over canonical(issuer, subject, schema, root) | BBS+ over BLS12-381 |
 | Selective disclosure | Per-leaf randomness, omitted for hidden leaves | BBS+ derive-proof |
-| Revocation | In-memory list (subjects + validator-set roots) | On-chain revocation registry / accumulator |
+| Revocation | In-memory list (subjects + validator-set roots + consumed approvalIds) | On-chain revocation registry / accumulator |
 | Issuer key handling | Generated per-process | KMS / HSM |
-| ZK proof | None (commitments + signature only) | Groth16 over a domain circuit |
+| ZK proof | Groth16 via snarkjs (local wasm + zkey) | Groth16 via Lemma SDK (remote artifacts) |
 | Issuance trigger | Static fixtures in `data/` | Bridge / LST operator webhook → Lemma worker |
 
 The verifier API surface (`verifyBridgeApproval`, `verifyLstCollateral`) is shaped so that a production Lemma SDK can be dropped in without changing the demo or the policy types.
+
+---
+
+## ZK circuit boundary — what is proven where
+
+This is a **hybrid ZK + on-chain verification** architecture, not "everything in ZK". The boundary is explicit and intentional:
+
+### In-circuit (zero-knowledge proven)
+
+These constraints are proven by the Groth16 proof. The verifier learns nothing about the hidden witness beyond "it satisfies these constraints":
+
+| Constraint | Bridge | LST |
+| --- | --- | --- |
+| Commitment binding | `Poseidon(witness) === originCommitment` | `Poseidon(witness) === collateralCommitment` |
+| Destination chain | `dstChainId === policyDstChainId` | — |
+| Amount cap | `amount <= policyMaxAmount` | — |
+| Signer threshold | `signersPresent >= policyMinSigners` | — |
+| Approval validity | `nowSec <= validUntil` | — |
+| Asset whitelist | — | `assetIdHash === policyAssetIdHash` |
+| Validator set not revoked | — | `validatorSetRevoked === 0` |
+| Rehypothecation depth | — | `depth <= policyMaxRehypoDepth` |
+| Custody hop count | — | `custodyHops <= policyMaxCustodyHops` |
+| Mint freshness | — | `mintedAt + minMintAge <= nowSec` |
+
+### Off-circuit (TypeScript / on-chain verification)
+
+These checks don't belong in the circuit — they'd inflate the constraint count without adding privacy value, or they require external state:
+
+| Check | Why off-circuit |
+| --- | --- |
+| Issuer signature | BBS+ signature is verified by the Lemma protocol layer; duplicating in-circuit is unnecessary |
+| Subject revocation | Requires access to an on-chain accumulator; the circuit receives a pre-checked bit |
+| Validator-set root revocation | Same — Merkle non-membership proof is an on-chain / protocol concern |
+| Consumed approvalIds (replay) | Requires mutable state; ZK proofs are stateless |
+| Full custody-path trust | Every DID must be checked against a dynamic trusted set; this is a policy concern, not a ZK constraint |
+| Source/mint chain whitelist | Small fixed sets are cheaper as a contract-side equality check |
+| Custody-path identities | Only the *count* is in-circuit; the actual DIDs are selective-disclosure leaves |
+
+This split is the **production architecture**, not a shortcut. Positioning it as "ZK + on-chain hybrid" is more honest and more compelling to enterprise customers than claiming everything is in ZK.
 
 ---
 
@@ -231,10 +288,12 @@ The verifier is intentionally a pure function. A real protocol would:
 2. Run `verifyBridgeApproval(attestation, { issuer, policy, revocations })` (or the LST equivalent) **before** dispatching the inner protocol call.
 3. On `ok: true`, proceed to the on-chain execution path. On `ok: false`, refuse and emit the rejection reason for monitoring.
 4. Replace the in-memory `revocations` argument with reads against the on-chain Lemma revocation registry.
+5. Optionally, also verify the ZK proof via `zkProveBridgeApproval` / `zkProveLstCollateral` for the commitment-binding guarantee.
 
 ```ts
 import {
   verifyBridgeApproval,
+  zkProveBridgeApproval,
   type BridgePolicy,
 } from "@example-origin/core";
 
@@ -246,13 +305,23 @@ const policy: BridgePolicy = {
   maxApprovalAgeSec: 24 * 60 * 60, // 24 hours
 };
 
+const revocations = await fetchRevocations();
+
+// Layer 1: off-circuit policy check
 const result = verifyBridgeApproval(payloadFromRelayer, {
   issuer: trustedIssuerKey,
   policy,
-  revocations: await fetchRevocations(),
+  revocations,
 });
-
 if (!result.ok) throw new Error(`origin rejected: ${result.reason}`);
+
+// Layer 2: ZK proof (commitment binding + in-circuit constraints)
+const zkResult = await zkProveBridgeApproval(
+  payloadFromRelayer.attributes,
+  { policyDstChainId: 42161, policyMaxAmount: "5000000000", policyMinSigners: 4, nowSec },
+);
+if (!zkResult.proof.verified) throw new Error("ZK proof verification failed");
+
 await bridge.execute(...);
 ```
 
@@ -260,7 +329,7 @@ await bridge.execute(...);
 
 ## Circom circuits (`packages/circuits`)
 
-Two minimal Groth16 circuits demonstrate what *should* be proven in zero knowledge for each scenario. They are intentionally tiny — each has under ten constraints beyond the Poseidon commitment, so the demo compiles in seconds and the policy logic is readable in one screen.
+Two minimal Groth16 circuits demonstrate what is proven in zero knowledge for each scenario. They are intentionally tiny — each has under ten constraints beyond the Poseidon commitment, so the demo compiles in seconds and the policy logic is readable in one screen.
 
 ### `bridge-approval-origin`
 
@@ -288,16 +357,6 @@ Constraints:
 4. `rehypothecationDepth <= policyMaxRehypoDepth`.
 5. `custodyHops <= policyMaxCustodyHops`.
 6. `mintedAt + policyMinMintAge <= nowSec` — mint event is at least the policy's minimum age old.
-
-### What is intentionally off-circuit
-
-The circuits are the *minimum* needed to prove origin policy. The surrounding Lemma flow already covers the rest, so duplicating it in-circuit would only inflate the constraint count:
-
-- **Issuer BBS+ signature** over the disclosure root — production Lemma carries this in the `signature: IssuerSignature` field of `RegisterDocumentRequest` and verifies it server-side; this PoC keeps an in-process HMAC analogue in `packages/core/src/verify.ts::verifyAttestation`.
-- **Revocation accumulator membership** — production wires a Poseidon-Merkle non-membership proof; here the witness exposes a single `validatorSetRevoked` bit and the off-circuit verifier checks it against the revoked-roots list.
-- **On-chain anchoring** of the document hash and proof receipt — handled by the verifier contract registered via `circuits.register`.
-- **Source-chain whitelist for bridges, mint-chain whitelist for LST** — small fixed sets are cheaper as a contract-side `eq`-against-list than as a circuit.
-- **Custody-path identities** — only the *length* is proven. The DIDs themselves are selective-disclosure leaves bound to the signed disclosure root.
 
 ### Running the circuit pipeline
 
@@ -336,11 +395,16 @@ The same Poseidon implementation lives inside the circuit (`circomlib`) and out 
 The repo ships JSON manifests for both schemas and circuits under `presets/`, typed against `SchemaMeta` / `CircuitMeta` from `@lemmaoracle/spec`. A single script registers them through the real `@lemmaoracle/sdk` client:
 
 ```bash
-pnpm presets:dry-run    # preview what would be sent (default — no API calls)
-pnpm presets:execute    # actually call schemas.register / circuits.register
+pnpm presets:generate  # generate manifests from build artifacts (replaces placeholder URLs)
+pnpm presets:dry-run   # preview what would be sent (default — no API calls)
+pnpm presets:execute   # actually call schemas.register / circuits.register
 ```
 
-The script is wired straight into the SDK:
+The `presets:generate` script reads the compiled circuit artifacts and writes manifests with:
+- Real SHA-256 hashes of the wasm and zkey files
+- Configurable artifact base URL (`ARTIFACT_BASE_URL` env var, defaults to `file://` local path)
+
+The `register-presets` script is wired straight into the SDK:
 
 ```ts
 import { create, schemas, circuits } from "@lemmaoracle/sdk";
@@ -374,10 +438,22 @@ The dry-run prints the exact JSON each call would send; nothing leaves the lapto
 
 ## Limitations & next steps
 
+### Current limitations
+
 - **In-memory issuer key.** Demo only — replace with a KMS-backed signer for any real deployment.
-- **Single-issuer trust model.** The verifier accepts one issuer DID; a federation registry would be needed for multi-operator settings.
+- **Single-issuer trust model.** The verifier accepts one issuer DID; a federation registry would be needed for multi-operator settings. See "Issuer federation roadmap" below.
 - **Revocation is a flat list.** Production should use a Merkle / sparse-merkle accumulator with on-chain anchoring.
-- **Preset artifact URIs are placeholders.** `https://example.invalid/...` keeps the manifests well-formed without pinning to a specific IPFS pin or HTTPS host. Replace before running `--execute` against a real Lemma deployment.
+- **Identifier hashing truncation.** `fieldHashOfString` masks the top byte of SHA-256 to fit BN254. This reduces collision resistance. Production should use a purpose-built field hash (e.g. Poseidon-based) or a full Merkle commitment instead of in-circuit hash equality.
+
+### Issuer federation roadmap
+
+The current system's security depends on the issuer's secret key. If an attacker compromises the issuer, they can forge valid attestations that pass all checks. To address this single point of failure, the roadmap includes:
+
+1. **Multi-sig issuer (near-term):** Require attestations to be signed by M-of-N issuer keys. The verifier checks that at least `threshold` signatures from the known issuer set are present. This raises the bar from "compromise one key" to "compromise multiple independent keys."
+
+2. **Federated issuer network (medium-term):** A registry of independent issuers, each with their own key material and attestation policies. Verifiers configure which issuers they trust, and the Lemma protocol routes attestations through the appropriate issuer. This eliminates single-issuer trust and enables multi-tenant deployments.
+
+3. **On-chain issuer governance (long-term):** Issuer set membership and key rotation are governed by an on-chain mechanism (DAO vote, stake-weighted election, etc.). The verifier contract reads the current issuer set from the chain, ensuring that key rotation and revocation are transparent and auditable.
 
 ---
 
