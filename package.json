@@ -18,6 +18,8 @@
     "presets:generate": "tsx scripts/generate-manifests.ts",
     "presets:dry-run": "tsx scripts/register-presets.ts",
     "presets:execute": "tsx scripts/register-presets.ts --execute",
+    "register-circuit": "tsx scripts/register-circuit.ts",
+    "register-circuit:execute": "tsx scripts/register-circuit.ts --execute",
     "format": "prettier --write ."
   },
   "packageManager": "pnpm@9.0.0",
@@ -28,8 +30,8 @@
     "typescript": "^5.5.0"
   },
   "dependencies": {
-    "@lemmaoracle/sdk": "^0.0.18",
-    "@lemmaoracle/spec": "^0.0.18",
+    "@lemmaoracle/sdk": "^0.0.22",
+    "@lemmaoracle/spec": "^0.0.22",
     "zod": "^3.23.0"
   }
 }

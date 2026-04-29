@@ -34,6 +34,7 @@ import {
   zkProveBridgeApproval,
   zkProveLstCollateral,
   zkArtifactsAvailable,
+  sdkArtifactsAvailable,
 } from "../zk-verify.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -282,7 +283,8 @@ async function main() {
   const scenario =
     args.find((a) => a.startsWith("--scenario="))?.split("=")[1] ?? "all";
 
-  const zkAvailable = zkArtifactsAvailable();
+  const localZkAvailable = zkArtifactsAvailable();
+  const sdkZkAvailable = await sdkArtifactsAvailable();
 
   console.log(
     `\n${c.bold}example-origin${c.reset} ${c.dim}— Lemma origin proof demo${c.reset}`,
@@ -290,7 +292,10 @@ async function main() {
   console.log(`${c.dim}issuer: ${issuer.did}${c.reset}`);
   console.log(`${c.dim}now:    ${NOW_SEC}${c.reset}`);
   console.log(
-    `${c.dim}ZK:     ${zkAvailable ? c.green + "artifacts found — Groth16 proofs enabled" : c.yellow + "no artifacts — run `pnpm circuits:prove` to enable ZK proofs"}${c.reset}`,
+    `${c.dim}SDK:    ${sdkZkAvailable ? c.green + "circuit artifacts available via Lemma API" : c.yellow + "no SDK artifacts — local fallback"}${c.reset}`,
+  );
+  console.log(
+    `${c.dim}ZK:     ${localZkAvailable ? c.green + "local artifacts found — Groth16 proofs enabled" : c.yellow + "no local artifacts — run `pnpm circuits:prove` to enable"}${c.reset}`,
   );
 
   if (scenario === "bridge" || scenario === "all") await runBridge();

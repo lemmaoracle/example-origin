@@ -8,4 +8,5 @@ export {
   zkProveBridgeApproval,
   zkProveLstCollateral,
   zkArtifactsAvailable,
+  sdkArtifactsAvailable,
 } from "./zk-verify.js";
