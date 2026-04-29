@@ -147,7 +147,7 @@ function expectMatch(label: string, gotOk: boolean) {
 async function tryZkBridge(attrs: BridgeApprovalAttributes) {
   try {
     const result = await zkProveBridgeApproval(attrs, {
-      policyDstChainId: bridgePolicy.allowedDstChainIds[0] ?? 42161,
+      policyDstChainId: attrs.dstChainId,
       policyMaxAmount: bridgePolicy.maxAmount.toString(),
       policyMinSigners: bridgePolicy.minSignersPresent,
       nowSec: NOW_SEC,
