@@ -103,11 +103,12 @@ for CIRCUIT in "${CIRCUITS[@]}"; do
   if [ -z "$SRC_FILE" ]; then continue; fi
 
   COMPILE_MS_LIST=()
+  BENCH_TMPDIR=$(mktemp -d -t example-origin-bench.XXXXXX)
   for i in $(seq 1 "$ITERATIONS"); do
     START=$(timestamp)
     circom "$SRC_FILE" --r1cs --wasm --sym \
       -l packages/circuits/node_modules \
-      -o /tmp/example-origin-bench \
+      -o "$BENCH_TMPDIR" \
       >/dev/null 2>&1
     ELAPSED=$(elapsed_ns "$START")
     COMPILE_MS_LIST+=($(ns_to_ms "$ELAPSED"))
@@ -117,6 +118,7 @@ for CIRCUIT in "${CIRCUITS[@]}"; do
   MID=$((ITERATIONS / 2))
   COMPILE_MEDIAN=${SORTED_COMPILE[$MID]:-${SORTED_COMPILE[0]}}
   COMPILE_TIMES[$CIRCUIT]="$COMPILE_MEDIAN"
+  rm -rf "$BENCH_TMPDIR"
 done
 
 # ── Output ───────────────────────────────────────────────────────────────────
